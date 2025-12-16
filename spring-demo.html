@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spring Physics</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-alt: #f5f5f5;
+      --text: #1a1a1a;
+      --text-2: #666666;
+      --text-3: #999999;
+      --accent: #000000;
+      --green: #22c55e;
+      --orange: #f97316;
+      --red: #ef4444;
+      --mass-size: 72px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 48px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 48px;
+    }
+
+    /* 弹簧区域 */
+    .spring-view {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-alt);
+      min-height: 520px;
+      position: relative;
+    }
+
+    .spring-container {
+      position: relative;
+      width: 160px;
+      height: 380px;
+    }
+
+    .anchor {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80px;
+      height: 8px;
+      background: #ccc;
+    }
+
+    .spring-svg {
+      position: absolute;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      overflow: visible;
+    }
+
+    .mass {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: var(--mass-size);
+      height: var(--mass-size);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+      transition: transform 0.1s ease;
+    }
+
+    .mass:active, .mass.dragging {
+      cursor: grabbing;
+      transform: translateX(-50%) scale(1.02);
+    }
+
+    .mass-label {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .equilibrium {
+      display: none;
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 24px;
+      color: var(--text-3);
+      font-size: 12px;
+    }
+
+    /* 控制面板 */
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      padding: 8px 0;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-3);
+      margin-bottom: 16px;
+    }
+
+    /* 公式 */
+    .formula {
+      font-family: 'Times New Roman', serif;
+      font-size: 15px;
+      color: var(--text-2);
+      line-height: 2;
+    }
+
+    /* 参数控制 */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .control-label {
+      width: 70px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .control-label span {
+      color: var(--text-3);
+      font-weight: 400;
+      font-size: 11px;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 1px;
+      background: var(--text-3);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--text);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .control-value {
+      width: 40px;
+      text-align: right;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-2);
+    }
+
+    /* 状态数值 */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-value.pos { color: var(--accent); }
+    .stat-value.vel { color: var(--green); }
+    .stat-value.f-spring { color: var(--orange); }
+    .stat-value.f-damp { color: var(--red); }
+
+    /* 图表 */
+    .chart-wrap {
+      height: 140px;
+      background: var(--bg-alt);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* 按钮 */
+    .buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      flex: 1;
+      height: 40px;
+      background: var(--bg-alt);
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover {
+      background: #eaeaea;
+    }
+
+    button.primary {
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    button.primary:hover {
+      background: #333;
+    }
+
+    /* 提示 */
+    .tips {
+      font-size: 12px;
+      color: var(--text-3);
+      line-height: 1.8;
+    }
+
+    .tips strong {
+      color: var(--text-2);
+      font-weight: 500;
+    }
+
+    @media (max-width: 800px) {
+      body { padding: 24px; }
+      .container {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+      .spring-view { min-height: 400px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="spring-view">
+    <div class="spring-container">
+      <div class="anchor"></div>
+      <svg class="spring-svg" width="60" height="200" id="springSvg">
+        <path id="springPath" fill="none" stroke="#999" stroke-width="2"/>
+      </svg>
+      <div class="mass" id="mass"><span class="mass-label" id="massLabel">m</span></div>
+      <div class="equilibrium" id="equilibrium"></div>
+    </div>
+    <div class="hint">拖拽质量块</div>
+  </div>
+
+  <div class="panel">
+    <div>
+      <div class="section-title">公式</div>
+      <div class="formula">
+        F = −k·x − b·v<br>
+        a = F / m
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">参数</div>
+      <div class="controls">
+        <div class="control-row">
+          <span class="control-label">k <span>tension</span></span>
+          <input type="range" id="stiffness" min="10" max="500" value="200">
+          <span class="control-value" id="stiffnessVal">200</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">b <span>friction</span></span>
+          <input type="range" id="damping" min="1" max="60" value="6">
+          <span class="control-value" id="dampingVal">6</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">m <span>mass</span></span>
+          <input type="range" id="massInput" min="0.4" max="5" value="1" step="0.1">
+          <span class="control-value" id="massVal">1.0</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">Android</div>
+      <div class="controls">
+        <div class="control-row">
+          <span class="control-label">stiffness</span>
+          <input type="range" id="androidStiffness" min="10" max="500" value="200">
+          <span class="control-value" id="androidStiffnessVal">200</span>
+        </div>
+        <div class="control-row">
+          <span class="control-label">dampingRatio</span>
+          <input type="range" id="dampingRatio" min="0.1" max="2" value="0.21" step="0.01">
+          <span class="control-value" id="dampingRatioVal">0.21</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">状态</div>
+      <div class="stats">
+        <div class="stat-item">
+          <span class="stat-label">位移</span>
+          <span class="stat-value pos" id="posValue">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">速度</span>
+          <span class="stat-value vel" id="velValue">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">弹簧力</span>
+          <span class="stat-value f-spring" id="fSpringValue">0</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">阻尼力</span>
+          <span class="stat-value f-damp" id="fDampValue">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">波形</div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button class="primary" id="dropBtn">释放</button>
+      <button id="pullBtn">拉伸</button>
+      <button id="pushBtn">压缩</button>
+    </div>
+
+    <div class="tips">
+      <strong>k</strong> 刚度，越大回弹越快<br>
+      <strong>b</strong> 阻尼，越大衰减越快<br>
+      <strong>m</strong> 质量，越大加速度越小
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict'
+
+const msPerAnimationStep = 4
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v))
+const rubberClamp = (v, min, max, f = 0.32) => {
+  if (v < min) return min - (min - v) * f
+  if (v > max) return max + (v - max) * f
+  return v
+}
+
+function massSizeFor(m) {
+  const t = clamp((m - 0.4) / (5 - 0.4), 0, 1)
+  return Math.round(60 + 48 * t)
+}
+
+function spring(pos, dest = 200, v = 0, k = 120, b = 14, m = 1) {
+  return { pos, dest, v, k, b, m }
+}
+
+function springStep(s) {
+  const dt = msPerAnimationStep / 1000
+
+  // 物理参数
+  const stiffness = s.k
+  const damping = s.b
+  const mass = s.m
+
+  // 固有角频率 & 阻尼比
+  const naturalFreq = Math.sqrt(stiffness / mass)
+  const dampingRatio = damping / (2 * Math.sqrt(stiffness * mass))
+
+  // 初始状态（相对于平衡位置）
+  const x0 = s.pos - s.dest
+  const v0 = s.v
+
+  let x_t, v_t
+
+  // 根据阻尼比使用精确解析解
+  if (dampingRatio < 1) {
+    // 欠阻尼 (Underdamped) - 会回弹
+    const dampedFreq = naturalFreq * Math.sqrt(1 - dampingRatio * dampingRatio)
+    const coeffA = x0
+    const coeffB = (dampingRatio * naturalFreq * x0 + v0) / dampedFreq
+    const decay = Math.exp(-dampingRatio * naturalFreq * dt)
+
+    x_t = decay * (coeffA * Math.cos(dampedFreq * dt) + coeffB * Math.sin(dampedFreq * dt))
+    v_t = -dampingRatio * naturalFreq * x_t +
+           decay * (coeffB * dampedFreq * Math.cos(dampedFreq * dt) - coeffA * dampedFreq * Math.sin(dampedFreq * dt))
+
+  } else if (dampingRatio === 1) {
+    // 临界阻尼 (Critically Damped)
+    const decay = Math.exp(-naturalFreq * dt)
+    const coeffA = x0
+    const coeffB = v0 + naturalFreq * x0
+
+    x_t = decay * (coeffA + coeffB * dt)
+    v_t = decay * (v0 - naturalFreq * coeffB * dt)
+
+  } else {
+    // 过阻尼 (Overdamped) - 无回弹
+    const freq2 = naturalFreq * Math.sqrt(dampingRatio * dampingRatio - 1)
+    const r1 = -dampingRatio * naturalFreq + freq2
+    const r2 = -dampingRatio * naturalFreq - freq2
+    const coeffB = (v0 - r1 * x0) / (r2 - r1)
+    const coeffA = x0 - coeffB
+
+    x_t = coeffA * Math.exp(r1 * dt) + coeffB * Math.exp(r2 * dt)
+    v_t = coeffA * r1 * Math.exp(r1 * dt) + coeffB * r2 * Math.exp(r2 * dt)
+  }
+
+  // 更新状态
+  s.pos = s.dest + x_t
+  s.v = v_t
+
+  // 用于 UI 显示
+  s.Fspring = -s.k * (s.pos - s.dest)
+  s.Fdamper = -s.b * s.v
+}
+
+let scheduledRender = false
+function scheduleRender() {
+  if (scheduledRender) return
+  scheduledRender = true
+  requestAnimationFrame(function tick(now) {
+    scheduledRender = false
+    if (render(now)) scheduleRender()
+  })
+}
+
+let animatedUntilTime = null
+let destY = 200
+let state = spring(destY, destY, 0, 200, 6, 1)
+let isDragging = false
+let dragOffset = 0
+let pointerHistory = []
+let minPos = 20
+let maxPos = 320
+let containerRect = null
+let massSize = 72
+const anchorOffset = 8
+
+const history = { pos: [], vel: [] }
+const maxHistory = 120
+
+const mass = document.getElementById('mass')
+const equilibrium = document.getElementById('equilibrium')
+const springSvg = document.getElementById('springSvg')
+const springPath = document.getElementById('springPath')
+const springContainer = document.querySelector('.spring-container')
+const chart = document.getElementById('chart')
+const ctx = chart.getContext('2d')
+
+function resizeCanvas() {
+  const rect = chart.getBoundingClientRect()
+  const dpr = window.devicePixelRatio || 1
+  chart.width = rect.width * dpr
+  chart.height = rect.height * dpr
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+}
+resizeCanvas()
+window.addEventListener('resize', () => {
+  resizeCanvas()
+  updateGeometry()
+  scheduleRender()
+})
+
+function syncMassSize() {
+  const size = massSizeFor(state.m)
+  mass.style.setProperty('--mass-size', `${size}px`)
+  updateGeometry()
+}
+syncMassSize()
+
+function recordPointer(y) {
+  pointerHistory.push({ y, time: performance.now() })
+  if (pointerHistory.length > 24) pointerHistory.shift()
+}
+
+function computeReleaseVelocity() {
+  if (pointerHistory.length < 2) return 0
+  const now = performance.now()
+  let i = pointerHistory.length - 2
+  while (i > 0 && now - pointerHistory[i].time <= 120) i--
+  const older = pointerHistory[Math.max(0, i)]
+  const latest = pointerHistory[pointerHistory.length - 1]
+  const dt = (latest.time - older.time) / 1000
+  return dt <= 0 ? 0 : (latest.y - older.y) / dt
+}
+
+function getLocalY(e) {
+  return e.clientY - (containerRect ? containerRect.top : 0)
+}
+
+function updateGeometry() {
+  containerRect = springContainer.getBoundingClientRect()
+  massSize = mass.getBoundingClientRect().height || massSize
+  const oldDisp = state.pos - state.dest
+  destY = clamp(containerRect.height * 0.52, anchorOffset + 20, containerRect.height - massSize - 10)
+  minPos = anchorOffset + 4
+  maxPos = containerRect.height - massSize - 4
+  state.dest = destY
+  state.pos = clamp(destY + oldDisp, minPos, maxPos)
+  equilibrium.style.top = (destY + massSize / 2) + 'px'
+}
+updateGeometry()
+
+function drawSpring(startY, endY) {
+  const w = 60
+  const cx = w / 2
+  const h = Math.max(10, endY - startY)
+
+  const coils = 12
+  const radius = 14
+  const resolution = 30
+  const padding = 8
+
+  const springH = Math.max(0, h - padding * 2)
+
+  let d = `M ${cx} 0 L ${cx} ${padding}`
+
+  const totalPoints = coils * resolution
+
+  for (let i = 0; i <= totalPoints; i++) {
+    const t = i / totalPoints
+    const y = padding + (t * springH)
+    const x = cx + radius * Math.sin(t * coils * Math.PI * 2)
+    d += ` L ${x} ${y}`
+  }
+
+  d += ` L ${cx} ${h}`
+
+  springPath.setAttribute('d', d)
+  springSvg.style.height = h + 'px'
+  springSvg.setAttribute('height', h)
+  springSvg.setAttribute('viewBox', `0 0 ${w} ${h}`)
+}
+
+mass.addEventListener('pointerdown', e => {
+  animatedUntilTime = null
+  pointerHistory = []
+  isDragging = true
+  dragOffset = getLocalY(e) - state.pos
+  state.v = 0
+  mass.classList.add('dragging')
+  mass.setPointerCapture?.(e.pointerId)
+  recordPointer(state.pos)
+  scheduleRender()
+})
+
+window.addEventListener('pointermove', e => {
+  if (!isDragging) return
+  state.pos = rubberClamp(getLocalY(e) - dragOffset, minPos, maxPos)
+  state.v = 0
+  recordPointer(state.pos)
+  scheduleRender()
+})
+
+function release() {
+  if (!isDragging) return
+  state.v = clamp(computeReleaseVelocity(), -1600, 1600)
+  isDragging = false
+  animatedUntilTime = null
+  mass.classList.remove('dragging')
+  pointerHistory = []
+  scheduleRender()
+}
+
+window.addEventListener('pointerup', release)
+window.addEventListener('pointercancel', release)
+
+document.getElementById('stiffness').addEventListener('input', e => {
+  state.k = +e.target.value
+  document.getElementById('stiffnessVal').textContent = e.target.value
+  syncAndroidParams()
+  scheduleRender()
+})
+
+document.getElementById('damping').addEventListener('input', e => {
+  state.b = +e.target.value
+  document.getElementById('dampingVal').textContent = e.target.value
+  syncAndroidParams()
+  scheduleRender()
+})
+
+document.getElementById('massInput').addEventListener('input', e => {
+  state.m = +e.target.value
+  document.getElementById('massVal').textContent = (+e.target.value).toFixed(1)
+  syncMassSize()
+  syncAndroidParams()
+  scheduleRender()
+})
+
+// Android 参数换算
+function calcDampingRatio() {
+  return state.b / (2 * Math.sqrt(state.k * state.m))
+}
+
+function calcBFromDampingRatio(zeta) {
+  return zeta * 2 * Math.sqrt(state.k * state.m)
+}
+
+function syncAndroidParams() {
+  const zeta = calcDampingRatio()
+  document.getElementById('androidStiffness').value = state.k
+  document.getElementById('androidStiffnessVal').textContent = state.k
+  document.getElementById('dampingRatio').value = zeta.toFixed(2)
+  document.getElementById('dampingRatioVal').textContent = zeta.toFixed(2)
+}
+
+function syncPhysicsParams() {
+  document.getElementById('stiffness').value = state.k
+  document.getElementById('stiffnessVal').textContent = state.k
+  document.getElementById('damping').value = Math.round(state.b)
+  document.getElementById('dampingVal').textContent = Math.round(state.b)
+}
+
+document.getElementById('androidStiffness').addEventListener('input', e => {
+  state.k = +e.target.value
+  document.getElementById('androidStiffnessVal').textContent = e.target.value
+  // 保持 damping ratio 不变，更新 b
+  const zeta = +document.getElementById('dampingRatio').value
+  state.b = calcBFromDampingRatio(zeta)
+  syncPhysicsParams()
+  scheduleRender()
+})
+
+document.getElementById('dampingRatio').addEventListener('input', e => {
+  const zeta = +e.target.value
+  document.getElementById('dampingRatioVal').textContent = zeta.toFixed(2)
+  state.b = calcBFromDampingRatio(zeta)
+  syncPhysicsParams()
+  scheduleRender()
+})
+
+// 初始化同步
+syncAndroidParams()
+
+function primeSpring(pos, v = 0) {
+  state.pos = clamp(pos, minPos, maxPos)
+  state.v = v
+  pointerHistory = []
+  history.pos = []
+  history.vel = []
+  scheduleRender()
+}
+
+document.getElementById('dropBtn').addEventListener('click', () => {
+  primeSpring(destY - (destY - minPos) * 0.6, 0)
+})
+
+document.getElementById('pullBtn').addEventListener('click', () => {
+  primeSpring(destY + (maxPos - destY) * 0.8, 0)
+})
+
+document.getElementById('pushBtn').addEventListener('click', () => {
+  primeSpring(destY - (destY - minPos) * 0.4, -700)
+})
+
+function drawChart() {
+  const dpr = window.devicePixelRatio || 1
+  const w = chart.width / dpr, h = chart.height / dpr
+  ctx.clearRect(0, 0, w, h)
+
+  ctx.strokeStyle = '#eee'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(0, h / 2)
+  ctx.lineTo(w, h / 2)
+  ctx.stroke()
+
+  if (history.pos.length < 2) return
+
+  ctx.lineWidth = 1.5
+  ctx.lineCap = 'round'
+
+  // 缩小位移和速度的显示比例
+  ctx.strokeStyle = '#000'
+  ctx.beginPath()
+  history.pos.forEach((v, i) => {
+    const x = (i / maxHistory) * w
+    const y = h / 2 - (v - destY) / 300 * (h / 2)
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  })
+  ctx.stroke()
+
+  ctx.strokeStyle = '#22c55e'
+  ctx.beginPath()
+  history.vel.forEach((v, i) => {
+    const x = (i / maxHistory) * w
+    const y = h / 2 - v / 800 * (h / 2)
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  })
+  ctx.stroke()
+}
+
+function render(now) {
+  if (!isDragging) {
+    let t = animatedUntilTime ?? now
+    const steps = Math.min(Math.floor((now - t) / msPerAnimationStep), 60)
+    t += steps * msPerAnimationStep
+    for (let i = 0; i < steps; i++) springStep(state)
+    animatedUntilTime = t
+  } else {
+    animatedUntilTime = null
+    state.Fspring = -state.k * (state.pos - state.dest)
+    state.Fdamper = -state.b * state.v
+  }
+
+  history.pos.push(state.pos)
+  history.vel.push(state.v)
+  if (history.pos.length > maxHistory) {
+    history.pos.shift()
+    history.vel.shift()
+  }
+
+  mass.style.top = state.pos + 'px'
+  drawSpring(anchorOffset, state.pos + Math.min(10, massSize * 0.15))
+
+  document.getElementById('posValue').textContent = (state.pos - destY).toFixed(0)
+  document.getElementById('velValue').textContent = state.v.toFixed(1)
+  document.getElementById('fSpringValue').textContent = (state.Fspring || 0).toFixed(1)
+  document.getElementById('fDampValue').textContent = (state.Fdamper || 0).toFixed(1)
+
+  drawChart()
+
+  const moving = isDragging || Math.abs(state.v) > 0.01 || Math.abs(state.pos - state.dest) > 0.01
+
+  if (!moving) {
+    state.pos = state.dest
+    state.v = 0
+    animatedUntilTime = null
+  }
+
+  return moving
+}
+
+scheduleRender()
+</script>
+</body>
+</html>
